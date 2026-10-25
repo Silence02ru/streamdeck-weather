@@ -114,9 +114,9 @@
 	<div class="hint">Текст в поле Title заменяет название города (например, «Питер»). Длинная подпись сама уменьшается, чтобы влезть.</div>
 	<div class="row">
 		<label for="proxy">Прокси</label>
-		<div class="ctl"><input id="proxy" type="text" placeholder="авто (системный)" /></div>
+		<div class="ctl"><input id="proxy" type="text" placeholder="авто (системный) или socks5h://127.0.0.1:1080" /></div>
 	</div>
-	<div class="hint">Пусто — системный прокси Windows, «none» — напрямую, или host:port</div>
+	<div class="hint">Пусто — системный прокси Windows, «none» — напрямую.<br />HTTP: host:port или http://host:port. SOCKS: socks5h://host:port (DNS через прокси), socks5://, socks4a://, socks4://. С паролем: socks5h://логин:пароль@host:port</div>
 	<div class="hint">Нажатие — сменить вид, долгое нажатие — обновить сейчас.<br />Данные: open-meteo.com</div>
 
 	<script>

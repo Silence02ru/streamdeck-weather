@@ -19,7 +19,7 @@
 - **Поиск города по названию** прямо в настройках кнопки (или ввод координат).
 - °C / °F, м/с / км/ч, частота обновления.
 - Подпись города подстраивается под ширину кнопки; её можно заменить своей через **Title** (например, «Питер»).
-- Работает через прокси: системный прокси Windows подхватывается автоматически.
+- Работает через прокси HTTP, SOCKS5 (в том числе socks5h) и SOCKS4; системный прокси Windows подхватывается автоматически.
 
 ## Установка
 
@@ -72,7 +72,20 @@ powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 
 ### Прокси
 
-Поле **Прокси** в настройках: пусто — системный прокси Windows, `none` — напрямую, или `host:port`.
+Поле **Прокси** в настройках кнопки:
+
+| Значение | Что значит |
+|---|---|
+| *пусто* | системный прокси Windows (и переменные `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY`) |
+| `none` | напрямую, без прокси |
+| `127.0.0.1:10809` или `http://127.0.0.1:10809` | HTTP-прокси |
+| `socks5h://127.0.0.1:10808` | SOCKS5, адреса серверов определяет прокси — DNS тоже идёт через него (`socks://` — то же самое) |
+| `socks5://127.0.0.1:10808` | SOCKS5, адреса определяются на компьютере |
+| `socks4a://…`, `socks4://…` | SOCKS4a / SOCKS4 |
+| `socks5h://логин:пароль@host:port` | с авторизацией (так же для `http://`) |
+
+Если в системных настройках Windows указан только SOCKS-прокси, плагин использует его как `socks5h`.
+Для v2rayN / xray / Clash обычно подходит `socks5h://127.0.0.1:10808` или HTTP `127.0.0.1:10809`.
 
 ## Вопросы
 
@@ -119,7 +132,7 @@ One key per city; place several keys to watch several cities at once.
 - Sources: [Open-Meteo](https://open-meteo.com) (free, no key) or Yandex Weather (free key from
   [yandex.ru/pogoda/b2b/smarthome](https://yandex.ru/pogoda/b2b/smarthome)). All Yandex cities are fetched in
   a single request, once an hour, to fit the free quota (30 requests/day).
-- City search by name, °C/°F, m/s / km/h, HTTP proxy support (Windows system proxy is detected automatically).
+- City search by name, °C/°F, m/s / km/h, proxy support: HTTP, SOCKS5/socks5h, SOCKS4/4a (Windows system proxy is detected automatically).
 - The UI is in Russian.
 
 **Install:** download `com.silence02.openmeteo.streamDeckPlugin` from [Releases](../../releases) and double-click it

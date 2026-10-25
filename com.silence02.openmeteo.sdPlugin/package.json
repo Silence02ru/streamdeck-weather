@@ -1,1 +1,1 @@
-{ "name": "streamdeck-weather", "version": "1.4.0", "private": true, "type": "module", "dependencies": { "@elgato/streamdeck": "3.0.3" } }
+{ "name": "streamdeck-weather", "version": "1.5.0", "private": true, "type": "module", "dependencies": { "@elgato/streamdeck": "3.0.3" } }
