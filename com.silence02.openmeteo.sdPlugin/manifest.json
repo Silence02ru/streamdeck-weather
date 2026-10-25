@@ -11,11 +11,21 @@
 	"CategoryIcon": "imgs/plugin/category",
 	"CodePath": "bin/plugin.js",
 	"SDKVersion": 2,
-	"Software": { "MinimumVersion": "7.1" },
-	"Nodejs": { "Version": "20" },
+	"Software": {
+		"MinimumVersion": "7.1"
+	},
+	"Nodejs": {
+		"Version": "20"
+	},
 	"OS": [
-		{ "Platform": "windows", "MinimumVersion": "10" },
-		{ "Platform": "mac", "MinimumVersion": "12" }
+		{
+			"Platform": "windows",
+			"MinimumVersion": "10"
+		},
+		{
+			"Platform": "mac",
+			"MinimumVersion": "12"
+		}
 	],
 	"Actions": [
 		{
@@ -24,7 +34,9 @@
 			"Icon": "imgs/actions/weather/icon",
 			"Tooltip": "Текущая погода. Нажатие — сменить вид, долгое нажатие — обновить",
 			"PropertyInspectorPath": "ui/weather.html",
-			"Controllers": ["Keypad"],
+			"Controllers": [
+				"Keypad"
+			],
 			"SupportedInMultiActions": false,
 			"States": [
 				{

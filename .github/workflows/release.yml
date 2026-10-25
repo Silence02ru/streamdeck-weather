@@ -1,0 +1,49 @@
+# Релиз по тегу: git tag v1.4.0 && git push origin v1.4.0
+# Собирает com.silence02.openmeteo.streamDeckPlugin и публикует его на странице Releases.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      PLUGIN_DIR: com.silence02.openmeteo.sdPlugin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Версия в теге должна совпадать с версией в manifest.json (v1.4.0 ↔ 1.4.0.0).
+      - name: Check version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          manifest=$(node -p "require('./$PLUGIN_DIR/manifest.json').Version")
+          case "$manifest" in
+            "$tag"|"$tag".*) echo "Версия $manifest соответствует тегу $GITHUB_REF_NAME" ;;
+            *) echo "::error::Тег $GITHUB_REF_NAME не совпадает с версией в manifest.json ($manifest)"; exit 1 ;;
+          esac
+
+      # Плагин работает без сборщика, поэтому node_modules кладутся внутрь пакета.
+      - name: Install dependencies
+        run: npm ci --omit=dev --no-audit --no-fund
+        working-directory: ${{ env.PLUGIN_DIR }}
+
+      - name: Pack plugin
+        run: npx -y @elgato/cli@1.10.3 pack "$PLUGIN_DIR" --output dist --force --no-update-check
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.streamDeckPlugin
+          generate_release_notes: true
+          body: |
+            Скачайте `com.silence02.openmeteo.streamDeckPlugin` ниже и дважды щёлкните по нему — Stream Deck установит плагин.
+            Требуется Stream Deck 7.1 или новее. Что изменилось — в [CHANGELOG.md](https://github.com/Silence02ru/streamdeck-weather/blob/main/CHANGELOG.md).

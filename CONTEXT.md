@@ -25,6 +25,7 @@
 | `scripts/gen-icons.mjs` | Генерирует PNG-иконки из SVG через headless Edge/Chrome. С аргументом-папкой дополнительно рисует превью всех вариантов кнопки. |
 | `scripts/gen-preview.mjs` | Рисует `docs/preview.png` для README: 3 города × 3 вида, кодом `render.js` на примерных данных, скриншот через headless Edge/Chrome. |
 | `scripts/pack.ps1` | Сборка релиза: `npm install --omit=dev` и `npx @elgato/cli@1.10.3 pack` → `dist/com.silence02.openmeteo.streamDeckPlugin` (с `node_modules` внутри, т.к. сборщика нет). `dist/` в .gitignore. |
+| `.github/workflows/release.yml` | Релиз по тегу `v*`: проверяет, что тег совпадает с `Version` в manifest.json, `npm ci --omit=dev`, `@elgato/cli pack`, публикует `.streamDeckPlugin` на странице Releases (softprops/action-gh-release). Выпуск версии: поднять `Version`, закоммитить, `git tag vX.Y.Z` + `git push origin vX.Y.Z`. |
 | `README.md`, `LICENSE`, `docs/` | Описание для GitHub (RU + краткое EN), MIT, картинка кнопок. |
 | `scripts/install.ps1` | `npm install` → закрыть Stream Deck → скопировать папку плагина (robocopy /MIR) в `%APPDATA%\Elgato\StreamDeck\Plugins` → запустить Stream Deck. Junction не используется: Stream Deck не разрешает ссылку на диск S: («reparse point buffer is invalid»). |
 

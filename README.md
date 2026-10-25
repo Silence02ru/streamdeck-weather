@@ -95,7 +95,9 @@ scripts/            установка, сборка релиза, генера�
 
 - Код запускается как есть, без сборщика; единственная зависимость — `@elgato/streamdeck`.
 - После правок: `scripts\install.ps1`.
-- Собрать файл для релиза: `scripts\pack.ps1` → `dist\com.silence02.openmeteo.streamDeckPlugin`.
+- Выпустить релиз: поднять `Version` в `manifest.json`, закоммитить и отправить тег —
+  `git tag v1.4.0` и `git push origin v1.4.0`. GitHub Actions сам соберёт `.streamDeckPlugin` и опубликует релиз.
+  Локальная сборка того же файла: `scripts\pack.ps1` → `dist\`.
 - Иконки: `node scripts/gen-icons.mjs`, картинка для README: `node scripts/gen-preview.mjs`.
 - Подробное устройство — в [CONTEXT.md](CONTEXT.md), история изменений — в [CHANGELOG.md](CHANGELOG.md).
 
