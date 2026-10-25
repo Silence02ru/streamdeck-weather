@@ -117,6 +117,36 @@ export function getJson(url, proxy, { body, headers: extraHeaders = {} } = {}) {
 }
 
 /**
+ * Проверка связи для кнопки «Проверить» в настройках: через прокси (или напрямую)
+ * открывает TLS-соединение с host:443 и сразу закрывает его. Запрос к API не отправляется,
+ * поэтому лимит ключа Яндекса не тратится.
+ * Возвращает { proxy — фактически использованный адрес или null, ms }; при ошибке бросает исключение.
+ */
+export async function testConnection(setting, host) {
+	const proxy = await resolveProxy(setting);
+	const started = Date.now();
+	const socket = proxy ? await openTunnel(proxy, host, 443) : null;
+	await new Promise((resolve, reject) => {
+		const conn = socket
+			? tls.connect({ socket, servername: host })
+			: tls.connect({ host, port: 443, servername: host });
+		conn.setTimeout(TIMEOUT_MS, () => conn.destroy(new Error(`нет ответа за ${TIMEOUT_MS / 1000} с`)));
+		conn.once("secureConnect", () => {
+			conn.destroy();
+			resolve();
+		});
+		conn.once("error", (err) => reject(new Error(proxy ? `TLS через прокси: ${err.message}` : `напрямую: ${err.message}`)));
+	});
+	return { proxy, ms: Date.now() - started };
+}
+
+/** Адрес прокси для лога и окна настроек: пароль заменён на ***. */
+export function maskProxy(proxy) {
+	if (!proxy) return proxy;
+	return proxy.replace(/^((?:[a-z0-9]+:\/\/)?[^:@/]+:)[^@/]*@/i, "$1***@");
+}
+
+/**
  * Разбирает адрес прокси. Схемы: http:// (по умолчанию, если схемы нет),
  * socks5:// (адрес сервера определяется локально), socks5h:// и socks:// (адрес определяет прокси),
  * socks4://, socks4a://.

@@ -1,5 +1,6 @@
 // Точка входа плагина. Stream Deck запускает этот файл через встроенный Node.js.
 import streamDeck, { SingletonAction } from "@elgato/streamdeck";
+import { maskProxy, testConnection } from "./http.js";
 import { fetchWeather } from "./weather.js";
 import { forgetYandexButton, yandexEvents } from "./yandex.js";
 import { renderMessage, renderWeather } from "./render.js";
@@ -40,6 +41,26 @@ class WeatherAction extends SingletonAction {
 		this.titles.set(ev.action.id, { title: ev.payload.title ?? "", params: ev.payload.titleParameters ?? {} });
 		const state = this.keys.get(ev.action.id);
 		if (state?.data) await this.draw(state);
+	}
+
+	/**
+	 * Сообщения из окна настроек. { type: "testProxy", id, proxy, source } — проверить связь
+	 * с сервером погоды через указанный прокси; ответ { type: "testProxyResult", id, ok, ... }.
+	 */
+	async onSendToPlugin(ev) {
+		const msg = ev.payload ?? {};
+		if (msg.type !== "testProxy") return;
+		const host = msg.source === "yandex" ? "api.weather.yandex.ru" : "api.open-meteo.com";
+		let reply;
+		try {
+			const { proxy, ms } = await testConnection(msg.proxy, host);
+			// Пароль прокси не показываем ни в окне настроек, ни в логе.
+			reply = { ok: true, proxy: maskProxy(proxy), ms, host };
+		} catch (err) {
+			reply = { ok: false, error: err?.message ?? String(err), host };
+		}
+		streamDeck.logger.info(`Проверка прокси «${maskProxy(msg.proxy) || "авто"}» → ${host}: ${reply.ok ? `ок, ${reply.ms} мс` : reply.error}`);
+		await streamDeck.ui.sendToPropertyInspector({ type: "testProxyResult", id: msg.id, ...reply });
 	}
 
 	async onWillAppear(ev) {
@@ -108,7 +129,7 @@ class WeatherAction extends SingletonAction {
 				longitude: Number(s.longitude),
 				units: s.units,
 				windUnit: s.windUnit,
-				proxy: s.proxy,
+				proxy: this.proxyFor(s),
 				source: s.source,
 				// Общий ключ; ключ в настройках кнопки — для старых кнопок.
 				yandexKey: globalSettings.yandexKey || s.yandexKey,
@@ -132,6 +153,22 @@ class WeatherAction extends SingletonAction {
 			clearTimeout(state.timer);
 			state.timer = setTimeout(() => this.refresh(id), (isYandex ? 30 : 1) * 60 * 1000);
 		}
+	}
+
+	/**
+	 * Прокси общий для всех кнопок (globalSettings.proxy: "" — авто, "none", адрес).
+	 * Старые кнопки хранили его в своих настройках: первый непустой такой прокси
+	 * переносится в общие настройки, дальше настройка кнопки не используется.
+	 */
+	proxyFor(s) {
+		if (!("proxy" in globalSettings) && s.proxy) {
+			globalSettings = { ...globalSettings, proxy: s.proxy };
+			streamDeck.settings.setGlobalSettings(globalSettings).catch((err) =>
+				streamDeck.logger.error(`Не удалось сохранить общий прокси: ${err?.message ?? err}`),
+			);
+			streamDeck.logger.info(`Прокси кнопки перенесён в общие настройки: ${maskProxy(s.proxy)}`);
+		}
+		return "proxy" in globalSettings ? globalSettings.proxy : s.proxy;
 	}
 
 	async draw(state) {
@@ -159,13 +196,15 @@ streamDeck.logger.setLevel("info");
 const weatherAction = new WeatherAction();
 streamDeck.actions.registerAction(weatherAction);
 
-// Ключ сменили в окне настроек — обновить все кнопки Яндекса.
+// Общие настройки сменили в окне настроек: новый ключ — обновить кнопки Яндекса,
+// новый прокси — все кнопки (у Яндекса свежий кэш, лишнего запроса не будет).
 streamDeck.settings.onDidReceiveGlobalSettings((ev) => {
-	const prevKey = globalSettings.yandexKey;
+	const prev = globalSettings;
 	globalSettings = ev.settings ?? {};
-	if (globalSettings.yandexKey === prevKey) return;
+	const keyChanged = globalSettings.yandexKey !== prev.yandexKey;
+	const proxyChanged = globalSettings.proxy !== prev.proxy;
 	for (const [id, state] of weatherAction.keys) {
-		if (state.settings.source === "yandex") weatherAction.refresh(id);
+		if (proxyChanged || (keyChanged && state.settings.source === "yandex")) weatherAction.refresh(id);
 	}
 });
 

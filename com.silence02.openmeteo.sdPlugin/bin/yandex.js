@@ -49,7 +49,7 @@ export function describeYandexCondition(condition) {
  */
 export const yandexEvents = new EventEmitter();
 
-const buttons = new Map(); // id кнопки → { group, loc, lat, lon }
+const buttons = new Map(); // id кнопки → { group (= ключ API), loc, lat, lon }
 const results = new Map(); // `${group}|${loc}` → { time, point, serverTime }
 const pending = new Map(); // group → { timer, apiKey, proxyUrl, waiters: Map<loc, { lat, lon, ids, list }> }
 const inflight = new Map(); // group → { locs: Set, promise }
@@ -69,7 +69,9 @@ export async function fetchYandex({ latitude, longitude, units, windUnit, yandex
 	const apiKey = (yandexKey ?? "").trim();
 	if (!apiKey) throw keyError("не задан ключ API Яндекс Погоды");
 
-	const group = `${apiKey}|${proxyUrl ?? ""}`;
+	// Группа — только ключ: прокси общий для всех кнопок, и даже если у кнопок он разный
+	// (старые настройки), лимит считается по ключу — запрос всё равно один.
+	const group = apiKey;
 	const loc = locKey(latitude, longitude);
 	if (id) buttons.set(id, { group, loc, lat: Number(latitude), lon: Number(longitude) });
 
@@ -95,6 +97,8 @@ function enqueue(group, apiKey, proxyUrl, loc, lat, lon, id) {
 		batch.timer = setTimeout(() => runBatch(group), BATCH_DELAY_MS);
 		pending.set(group, batch);
 	}
+	// Прокси пакета — последний заданный (например, только что перенесённый в общие настройки).
+	batch.proxyUrl = proxyUrl;
 	return new Promise((resolve, reject) => {
 		const w = batch.waiters.get(loc) ?? { lat, lon, ids: new Set(), list: [] };
 		if (id) w.ids.add(id);

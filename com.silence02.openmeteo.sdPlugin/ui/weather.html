@@ -113,10 +113,14 @@
 	</div>
 	<div class="hint">Текст в поле Title заменяет название города (например, «Питер»). Длинная подпись сама уменьшается, чтобы влезть.</div>
 	<div class="row">
-		<label for="proxy">Прокси</label>
-		<div class="ctl"><input id="proxy" type="text" placeholder="авто (системный) или socks5h://127.0.0.1:1080" /></div>
+		<label for="proxy">Прокси (общий)</label>
+		<div class="ctl">
+			<input id="proxy" type="text" placeholder="авто (системный) или socks5h://127.0.0.1:1080" />
+			<button id="testProxy">Проверить</button>
+		</div>
 	</div>
-	<div class="hint">Пусто — системный прокси Windows, «none» — напрямую.<br />HTTP: host:port или http://host:port. SOCKS: socks5h://host:port (DNS через прокси), socks5://, socks4a://, socks4://. С паролем: socks5h://логин:пароль@host:port</div>
+	<div class="hint" id="proxyStatus" hidden></div>
+	<div class="hint">Один на все кнопки. Пусто — системный прокси Windows, «none» — напрямую.<br />HTTP: host:port или http://host:port. SOCKS: socks5h://host:port (DNS через прокси), socks5://, socks4a://, socks4://. С паролем: socks5h://логин:пароль@host:port</div>
 	<div class="hint">Нажатие — сменить вид, долгое нажатие — обновить сейчас.<br />Данные: open-meteo.com</div>
 
 	<script>
@@ -135,6 +139,7 @@
 		window.connectElgatoStreamDeckSocket = (port, uuid, registerEvent, info, actionInfo) => {
 			context = uuid;
 			const action = JSON.parse(actionInfo);
+			actionUUID = action.action;
 			settings = { ...DEFAULTS, ...(action.payload?.settings ?? {}) };
 			fillForm();
 
@@ -151,9 +156,41 @@
 				} else if (data.event === "didReceiveGlobalSettings") {
 					globalSettings = data.payload.settings ?? {};
 					fillForm();
+				} else if (data.event === "sendToPropertyInspector" && data.payload?.type === "testProxyResult") {
+					showProxyResult(data.payload);
 				}
 			};
 		};
+
+		// --- проверка прокси: плагин открывает соединение с сервером погоды через прокси ---
+		let actionUUID = null;
+		let proxyTestId = 0;
+
+		function testProxy() {
+			if (!socket || socket.readyState !== WebSocket.OPEN) return;
+			proxyTestId++;
+			setProxyStatus("Проверка…", "");
+			socket.send(JSON.stringify({
+				event: "sendToPlugin",
+				action: actionUUID,
+				context,
+				payload: { type: "testProxy", id: proxyTestId, proxy: $("proxy").value.trim(), source: settings.source },
+			}));
+		}
+
+		function showProxyResult(r) {
+			if (r.id !== proxyTestId) return; // ответ на устаревшую проверку
+			const via = r.proxy ? `через ${r.proxy}` : "напрямую, без прокси";
+			if (r.ok) setProxyStatus(`✓ Работает ${via}: ${r.host} — ${r.ms} мс`, "status");
+			else setProxyStatus(`✗ Нет связи с ${r.host}: ${r.error}`, "error");
+		}
+
+		function setProxyStatus(text, kind) {
+			const el = $("proxyStatus");
+			el.hidden = false;
+			el.className = `hint ${kind}`;
+			el.textContent = text;
+		}
 
 		// Ключ Яндекса хранится в глобальных настройках — один на все кнопки.
 		let globalSettings = {};
@@ -179,7 +216,8 @@
 			$("interval").value = String(settings.interval);
 			$("showCity").checked = settings.showCity !== false;
 			$("labelStyle").value = settings.labelStyle;
-			$("proxy").value = settings.proxy ?? "";
+			// Прокси общий для всех кнопок; у старых кнопок он мог остаться в их настройках.
+			$("proxy").value = ("proxy" in globalSettings ? globalSettings.proxy : settings.proxy) ?? "";
 			$("current").textContent = settings.cityName
 				? `Выбрано: ${settings.cityLabel || settings.cityName}`
 				: "Город не выбран — найдите его или введите координаты";
@@ -261,9 +299,17 @@
 			globalSettings = { ...globalSettings, yandexKey: $("yandexKey").value.trim() };
 			saveGlobal();
 		});
-		for (const id of ["units", "windUnit", "interval", "proxy", "labelStyle"]) {
+		for (const id of ["units", "windUnit", "interval", "labelStyle"]) {
 			$(id).addEventListener("change", () => { settings[id] = $(id).value; save(); });
 		}
+		// Прокси — в общих настройках (один на все кнопки). Новый адрес проверяется сразу.
+		$("proxy").addEventListener("change", () => {
+			globalSettings = { ...globalSettings, proxy: $("proxy").value.trim() };
+			saveGlobal();
+			testProxy();
+		});
+		$("proxy").addEventListener("keydown", (e) => { if (e.key === "Enter") $("proxy").blur(); });
+		$("testProxy").addEventListener("click", testProxy);
 		$("mode").addEventListener("change", () => { settings.mode = Number($("mode").value); save(); });
 		$("showCity").addEventListener("change", () => { settings.showCity = $("showCity").checked; save(); });
 	</script>
