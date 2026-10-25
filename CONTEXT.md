@@ -1,4 +1,6 @@
-# CONTEXT — плагин Stream Deck «Погода Open-Meteo»
+# CONTEXT — «Погода для Stream Deck» (streamdeck-weather)
+
+Публичный репозиторий: https://github.com/Silence02ru/streamdeck-weather (лицензия MIT). Имя плагина в Stream Deck — «Погода — Open-Meteo и Яндекс». UUID `com.silence02.openmeteo` и имя папки плагина не менять: к UUID привязаны уже настроенные кнопки.
 
 Плагин для Elgato Stream Deck (SDK v2, Node.js-рантайм, пакет `@elgato/streamdeck` 3.x), показывающий
 актуальную погоду на кнопке. Два источника (выбор на каждой кнопке):
@@ -21,6 +23,9 @@
 | `…sdPlugin/ui/weather.html` | Property Inspector на «голом» WebSocket-протоколе (`connectElgatoStreamDeckSocket`), без внешних библиотек. Выбор источника и ключ Яндекса — общий для всех кнопок, хранится в глобальных настройках плагина через `getGlobalSettings`/`setGlobalSettings` (поле видно только для Яндекса, ссылка на получение ключа открывается через событие `openUrl`). Поиск города через `geocoding-api.open-meteo.com` прямо из окна (для обоих источников), ручной ввод координат, единицы, вид, интервал, подпись, прокси. |
 | `…sdPlugin/imgs/` | PNG-иконки (генерируются скриптом, см. ниже). |
 | `scripts/gen-icons.mjs` | Генерирует PNG-иконки из SVG через headless Edge/Chrome. С аргументом-папкой дополнительно рисует превью всех вариантов кнопки. |
+| `scripts/gen-preview.mjs` | Рисует `docs/preview.png` для README: 3 города × 3 вида, кодом `render.js` на примерных данных, скриншот через headless Edge/Chrome. |
+| `scripts/pack.ps1` | Сборка релиза: `npm install --omit=dev` и `npx @elgato/cli@1.10.3 pack` → `dist/com.silence02.openmeteo.streamDeckPlugin` (с `node_modules` внутри, т.к. сборщика нет). `dist/` в .gitignore. |
+| `README.md`, `LICENSE`, `docs/` | Описание для GitHub (RU + краткое EN), MIT, картинка кнопок. |
 | `scripts/install.ps1` | `npm install` → закрыть Stream Deck → скопировать папку плагина (robocopy /MIR) в `%APPDATA%\Elgato\StreamDeck\Plugins` → запустить Stream Deck. Junction не используется: Stream Deck не разрешает ссылку на диск S: («reparse point buffer is invalid»). |
 
 ## Настройки кнопки (settings)
