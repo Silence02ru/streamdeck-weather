@@ -32,10 +32,10 @@
 	</div>
 	<div id="yandexBlock" hidden>
 		<div class="row">
-			<label for="yandexKey">Ключ API</label>
+			<label for="yandexKey">Ключ API (общий)</label>
 			<div class="ctl"><input id="yandexKey" type="password" placeholder="ключ Яндекс Погоды" /></div>
 		</div>
-		<div class="hint">Бесплатный ключ: <a href="#" id="getKey">yandex.ru/pogoda/b2b/smarthome</a>.<br />Активация до 5 минут. Обновление не чаще раза в 30 мин.</div>
+		<div class="hint">Бесплатный ключ: <a href="#" id="getKey">yandex.ru/pogoda/b2b/smarthome</a>.<br />Активация до 5 минут. Лимит ключа 30 запросов в сутки: все кнопки Яндекса обновляются одним запросом раз в час.</div>
 	</div>
 	<div class="row">
 		<label for="search">Город</label>
@@ -129,15 +129,28 @@
 			fillForm();
 
 			socket = new WebSocket(`ws://127.0.0.1:${port}`);
-			socket.onopen = () => socket.send(JSON.stringify({ event: registerEvent, uuid }));
+			socket.onopen = () => {
+				socket.send(JSON.stringify({ event: registerEvent, uuid }));
+				socket.send(JSON.stringify({ event: "getGlobalSettings", context: uuid }));
+			};
 			socket.onmessage = (msg) => {
 				const data = JSON.parse(msg.data);
 				if (data.event === "didReceiveSettings") {
 					settings = { ...DEFAULTS, ...data.payload.settings };
 					fillForm();
+				} else if (data.event === "didReceiveGlobalSettings") {
+					globalSettings = data.payload.settings ?? {};
+					fillForm();
 				}
 			};
 		};
+
+		// Ключ Яндекса хранится в глобальных настройках — один на все кнопки.
+		let globalSettings = {};
+		function saveGlobal() {
+			if (!socket || socket.readyState !== WebSocket.OPEN) return;
+			socket.send(JSON.stringify({ event: "setGlobalSettings", context, payload: globalSettings }));
+		}
 
 		function save() {
 			if (!socket || socket.readyState !== WebSocket.OPEN) return;
@@ -147,7 +160,7 @@
 		function fillForm() {
 			$("source").value = settings.source;
 			$("yandexBlock").hidden = settings.source !== "yandex";
-			$("yandexKey").value = settings.yandexKey ?? "";
+			$("yandexKey").value = globalSettings.yandexKey || settings.yandexKey || "";
 			$("latitude").value = settings.latitude ?? "";
 			$("longitude").value = settings.longitude ?? "";
 			$("units").value = settings.units;
@@ -224,8 +237,8 @@
 		}
 		$("source").addEventListener("change", () => {
 			settings.source = $("source").value;
-			// Для Яндекса интервал не меньше 30 минут (лимит ключа).
-			if (settings.source === "yandex" && Number(settings.interval) < 30) settings.interval = "30";
+			// Для Яндекса интервал не меньше 60 минут (лимит ключа 30 запросов в сутки).
+			if (settings.source === "yandex" && Number(settings.interval) < 60) settings.interval = "60";
 			fillForm();
 			save();
 		});
@@ -233,7 +246,11 @@
 			e.preventDefault();
 			socket?.send(JSON.stringify({ event: "openUrl", payload: { url: YANDEX_KEY_URL } }));
 		});
-		for (const id of ["units", "windUnit", "interval", "proxy", "yandexKey"]) {
+		$("yandexKey").addEventListener("change", () => {
+			globalSettings = { ...globalSettings, yandexKey: $("yandexKey").value.trim() };
+			saveGlobal();
+		});
+		for (const id of ["units", "windUnit", "interval", "proxy"]) {
 			$(id).addEventListener("change", () => { settings[id] = $(id).value; save(); });
 		}
 		$("mode").addEventListener("change", () => { settings.mode = Number($("mode").value); save(); });
