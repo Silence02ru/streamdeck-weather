@@ -27,6 +27,7 @@ class WeatherAction extends SingletonAction {
 		// Пакетный запрос Яндекса обновил и эти кнопки: перерисовать из кэша и
 		// перезапустить их таймеры, чтобы все кнопки дальше обновлялись вместе.
 		yandexEvents.on("updated", (ids) => ids.forEach((id) => this.refresh(id)));
+		yandexEvents.on("request", (count) => streamDeck.logger.info(`Яндекс: запрос погоды, городов в запросе: ${count}`));
 	}
 
 	async onWillAppear(ev) {

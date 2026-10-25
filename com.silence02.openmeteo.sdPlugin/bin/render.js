@@ -105,7 +105,7 @@ function windDirection(deg) {
 }
 
 /**
- * mode: 0 — сейчас, 1 — сегодня (макс/мин, осадки), 2 — ветер и влажность.
+ * mode: 0 — сейчас, 1 — сегодня (макс/мин, осадки или погода днём), 2 — ветер и влажность (или порывы).
  */
 export function renderWeather(w, { city, mode, showCity }) {
 	const { text: desc, icon } = w.description;
@@ -113,17 +113,26 @@ export function renderWeather(w, { city, mode, showCity }) {
 	const label = showCity && city ? shorten(city, 13) : shorten(desc, 13);
 
 	if (mode === 1) {
+		// Яндекс (бесплатный ключ) не даёт вероятность осадков — вместо неё погода днём.
+		const day = w.dayDescription;
+		const bottom = w.precipProb !== null && w.precipProb !== undefined
+			? `осадки ${round(w.precipProb)}%`
+			: shorten(day?.text ?? desc, 14);
 		body += text(72, 24, 17, "Сегодня", { weight: 500, color: "#cfe3ff" });
-		body += `<g transform='translate(8 32) scale(0.42)'>${weatherIcon(icon, true)}</g>`;
+		body += `<g transform='translate(8 32) scale(0.42)'>${weatherIcon(day?.icon ?? icon, true)}</g>`;
 		body += text(132, 62, 30, `${round(w.max)}°`, { weight: 700, anchor: "end" });
 		body += text(132, 96, 26, `${round(w.min)}°`, { weight: 500, color: "#a9c7ee", anchor: "end" });
-		body += text(72, 130, 18, `осадки ${round(w.precipProb)}%`, { weight: 500, color: "#cfe3ff" });
+		body += text(72, 130, 18, bottom, { weight: 500, color: "#cfe3ff" });
 	} else if (mode === 2) {
 		body += text(72, 24, 17, shorten(label, 13), { weight: 500, color: "#cfe3ff" });
 		body += `<g transform='translate(72 62) rotate(${(w.windDir + 180) % 360})'>
 <path d='M 0 -20 L 11 12 L 0 5 L -11 12 Z' fill='#ffffff'/></g>`;
 		body += text(72, 108, 22, `${round(w.wind)} ${w.windUnit} ${windDirection(w.windDir)}`, { weight: 600 });
-		body += text(72, 132, 18, `влажн. ${round(w.humidity)}%`, { weight: 500, color: "#cfe3ff" });
+		// Яндекс (бесплатный ключ) не даёт влажность — вместо неё порывы ветра.
+		const bottom = w.humidity !== null && w.humidity !== undefined
+			? `влажн. ${round(w.humidity)}%`
+			: w.gust !== null && w.gust !== undefined ? `порывы ${round(w.gust)}` : "";
+		body += text(72, 132, 18, bottom, { weight: 500, color: "#cfe3ff" });
 	} else {
 		body += text(72, 22, 17, label, { weight: 500, color: "#cfe3ff" });
 		body += `<g transform='translate(40 25) scale(0.64)'>${weatherIcon(icon, w.isDay)}</g>`;

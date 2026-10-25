@@ -58,7 +58,14 @@ export function getJson(url, proxy, { body, headers: extraHeaders = {} } = {}) {
 	const payload = body === undefined ? undefined : JSON.stringify(body);
 	return new Promise((resolve, reject) => {
 		const send = (createConnection) => {
-			const headers = { Accept: "application/json", "User-Agent": "streamdeck-openmeteo/1.0", ...extraHeaders };
+			const headers = {
+				// Явно: через туннель (createConnection без agent) Node подставил бы порт 80 —
+				// "Host: api.weather.yandex.ru:80", и балансировщик Яндекса отвечает 404.
+				Host: target.host,
+				Accept: "application/json",
+				"User-Agent": "streamdeck-openmeteo/1.0",
+				...extraHeaders,
+			};
 			if (payload !== undefined) {
 				headers["Content-Type"] = "application/json";
 				headers["Content-Length"] = Buffer.byteLength(payload);

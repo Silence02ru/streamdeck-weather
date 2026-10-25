@@ -43,7 +43,10 @@ export function describeYandexCondition(condition) {
 	return { text, icon };
 }
 
-/** События: "updated" (ids кнопок, для которых в кэше появились свежие данные). */
+/**
+ * События: "updated" (ids кнопок, для которых в кэше появились свежие данные),
+ * "request" (число точек в отправленном пакетном запросе — для лога).
+ */
 export const yandexEvents = new EventEmitter();
 
 const buttons = new Map(); // id кнопки → { group, loc, lat, lon }
@@ -113,6 +116,7 @@ async function runBatch(group) {
 	}
 	const locs = [...points.keys()];
 
+	yandexEvents.emit("request", locs.length);
 	const promise = request(batch.apiKey, batch.proxyUrl, [...points.values()]);
 	inflight.set(group, { locs: new Set(locs), promise });
 	try {
@@ -137,13 +141,15 @@ async function runBatch(group) {
 
 // Яндекс отдаёт °C и м/с; в нужные единицы переводим сами,
 // чтобы не зависеть от аргументов unit в схеме GraphQL.
+// Только поля, доступные бесплатному ключу (те же, что в yandex/pogoda-home-assistant):
+// humidity и precProbability на бесплатном тарифе дают "access denied for free role".
 const POINT_FIELDS = `{
-		now { condition daytime temperature feelsLike humidity windSpeed windAngle }
+		now { condition daytime temperature feelsLike windSpeed windAngle windGust }
 		forecast {
 			days {
 				summary {
-					night { minTemperature maxTemperature precProbability }
-					day { minTemperature maxTemperature precProbability }
+					night { minTemperature maxTemperature condition }
+					day { minTemperature maxTemperature condition }
 				}
 			}
 		}
@@ -170,13 +176,16 @@ async function request(apiKey, proxyUrl, points) {
 	try {
 		res = await send(apiKey, proxyUrl, { query: buildYandexQuery(points) });
 	} catch (err) {
-		if (err.status === 401 || err.status === 403 || err.status === 404) {
+		if (err.status === 401 || err.status === 403) {
 			throw keyError(`Яндекс отклонил ключ (HTTP ${err.status}); новый ключ активируется до 5 минут`);
 		}
 		if (err.status === 429) throw new Error("Яндекс: превышен лимит запросов (HTTP 429)");
 		throw err;
 	}
-	if (res.errors?.length) throw new Error(`Яндекс: ${res.errors.map((e) => e.message).join("; ")}`);
+	if (res.errors?.length) {
+		const details = res.errors.map((e) => (e.path ? `${e.message} (${e.path.join(".")})` : e.message));
+		throw new Error(`Яндекс: ${[...new Set(details)].join("; ")}`);
+	}
 	return res.data;
 }
 
@@ -196,6 +205,7 @@ export function parseYandexPoint({ point, serverTime }, units, windUnit) {
 	const highs = nums("maxTemperature");
 	const lows = nums("minTemperature");
 	const probs = parts.map((p) => p.precProbability).filter((p) => typeof p === "number");
+	const dayCondition = today.day?.condition ?? today.night?.condition;
 
 	const t = (c) => (c === null || c === undefined ? c : units === "fahrenheit" ? c * 1.8 + 32 : c);
 	const v = (ms) => (windUnit === "kmh" ? ms * 3.6 : ms);
@@ -207,6 +217,8 @@ export function parseYandexPoint({ point, serverTime }, units, windUnit) {
 		isDay: now.daytime === "DAY",
 		wind: v(now.windSpeed),
 		windDir: now.windAngle,
+		gust: typeof now.windGust === "number" ? v(now.windGust) : null,
+		dayDescription: dayCondition ? describeYandexCondition(dayCondition) : null,
 		max: t(highs.length ? Math.max(...highs) : null),
 		min: t(lows.length ? Math.min(...lows) : null),
 		precipProb: probs.length ? Math.max(...probs) * 100 : null,
