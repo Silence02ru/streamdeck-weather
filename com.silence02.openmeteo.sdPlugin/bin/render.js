@@ -104,13 +104,114 @@ function windDirection(deg) {
 	return DIRS[Math.round(((deg % 360) / 45)) % 8];
 }
 
+// --- подпись (город) сверху кнопки ---
+
+const LABEL_MAX_WIDTH = 136;
+const LABEL_SIZE = 24; // px на картинке 144×144
+const LABEL_MAX_SIZE = 30;
+const LABEL_MIN_SIZE = 12;
+
+// Ширина символов жирного Segoe UI в em, замерена в браузере (canvas measureText).
+// Пары [символы, ширина]. Для других шрифтов из Title это оценка.
+const CHAR_EM = new Map(
+	[
+		[".,", 0.27],
+		["ijl ", 0.28],
+		["I", 0.32],
+		["()", 0.37],
+		["f", 0.38],
+		["t", 0.39],
+		["r-", 0.4],
+		["г", 0.41],
+		["s", 0.44],
+		["тJ", 0.45],
+		["зсэcz", 0.48],
+		["ГL", 0.51],
+		["F", 0.52],
+		["ЕЁE", 0.53],
+		["аеёуaevy", 0.54],
+		["хx", 0.55],
+		["кьЗkS", 0.56],
+		["я", 0.57],
+		["0123456789в", 0.58],
+		["ТT", 0.59],
+		["лчhnu", 0.6],
+		["бнопРУoPYZ", 0.61],
+		["дрСЬЭbdgpqC", 0.62],
+		["ий", 0.63],
+		["БВЯB", 0.64],
+		["цъКKR", 0.65],
+		["ХX", 0.66],
+		["V", 0.67],
+		["АA", 0.7],
+		["G", 0.71],
+		["U", 0.72],
+		["ЛЧ", 0.73],
+		["D", 0.74],
+		["ОЪOQ", 0.76],
+		["ДНПH", 0.77],
+		["мф", 0.78],
+		["ИЙN", 0.79],
+		["w", 0.8],
+		["ы", 0.81],
+		["Ц", 0.82],
+		["Ф", 0.84],
+		["ж", 0.85],
+		["ш", 0.86],
+		["ю", 0.88],
+		["щЫ", 0.9],
+		["m", 0.92],
+		["МM", 0.96],
+		["Ж", 0.99],
+		["W", 1],
+		["Ш", 1.01],
+		["Ю", 1.06],
+		["Щ", 1.07],
+	].flatMap(([chars, em]) => [...chars].map((ch) => [ch, em])),
+);
+
+function widthEm(value, bold) {
+	const em = [...value].reduce((sum, ch) => sum + (CHAR_EM.get(ch) ?? 0.65), 0);
+	// Запас 6%: рендер Stream Deck может быть чуть шире браузерного.
+	return (bold ? em : em * 0.95) * 1.06;
+}
+
+/**
+ * Подпись сверху: жирная и крупная, сама уменьшается, чтобы влезть в ширину кнопки.
+ * style — параметры Title из Stream Deck (шрифт, размер, стиль, цвет) или null — стиль по умолчанию.
+ * Возвращает SVG-текст.
+ */
+function labelSvg(value, style) {
+	if (!value) return "";
+	const bold = style ? /bold/i.test(style.fontStyle ?? "") : true;
+	const italic = style ? /italic/i.test(style.fontStyle ?? "") : false;
+	// Размер Title в Stream Deck задан для кнопки 72 px, картинка у нас 144 px.
+	const wanted = style?.fontSize ? Math.min(LABEL_MAX_SIZE, style.fontSize * 2) : LABEL_SIZE;
+	const fit = Math.floor(LABEL_MAX_WIDTH / widthEm(value, bold));
+	const size = Math.max(LABEL_MIN_SIZE, Math.min(wanted, fit));
+
+	// Даже минимальным шрифтом не влезает — обрезаем с многоточием.
+	let shown = value;
+	while (shown.length > 1 && widthEm(shown, bold) * size > LABEL_MAX_WIDTH) shown = shown.slice(0, -2) + "…";
+
+	const family = style?.fontFamily ? `"${style.fontFamily}", "Segoe UI", Arial, sans-serif` : `"Segoe UI", Arial, sans-serif`;
+	const color = style?.titleColor || "#ffffff";
+	const y = Math.round(3 + size * 0.82);
+	return `<text x='72' y='${y}' font-family='${esc(family)}' font-size='${size}' font-weight='${bold ? 700 : 400}'` +
+		`${italic ? " font-style='italic'" : ""}${style?.fontUnderline ? " text-decoration='underline'" : ""}` +
+		` fill='${esc(color)}' text-anchor='middle'>${esc(shown)}</text>`;
+}
+
 /**
  * mode: 0 — сейчас, 1 — сегодня (макс/мин, осадки или погода днём), 2 — ветер и влажность (или порывы).
+ * title — текст Title кнопки (заменяет название города), titleStyle — параметры Title или null,
+ * hideLabel — подпись рисует сам Stream Deck (в Title включён «Показывать заголовок»).
  */
-export function renderWeather(w, { city, mode, showCity }) {
+export function renderWeather(w, { city, mode, showCity, title = "", titleStyle = null, hideLabel = false }) {
 	const { text: desc, icon } = w.description;
 	let body = background(w.isDay);
-	const label = showCity && city ? shorten(city, 13) : shorten(desc, 13);
+	const place = title || (showCity && city ? city : "");
+	const label = (value) => (hideLabel ? "" : labelSvg(value, titleStyle));
 
 	if (mode === 1) {
 		// Яндекс (бесплатный ключ) не даёт вероятность осадков — вместо неё погода днём.
@@ -118,14 +219,14 @@ export function renderWeather(w, { city, mode, showCity }) {
 		const bottom = w.precipProb !== null && w.precipProb !== undefined
 			? `осадки ${round(w.precipProb)}%`
 			: shorten(day?.text ?? desc, 14);
-		body += text(72, 24, 17, "Сегодня", { weight: 500, color: "#cfe3ff" });
-		body += `<g transform='translate(8 32) scale(0.42)'>${weatherIcon(day?.icon ?? icon, true)}</g>`;
-		body += text(132, 62, 30, `${round(w.max)}°`, { weight: 700, anchor: "end" });
-		body += text(132, 96, 26, `${round(w.min)}°`, { weight: 500, color: "#a9c7ee", anchor: "end" });
-		body += text(72, 130, 18, bottom, { weight: 500, color: "#cfe3ff" });
+		body += label(place || "Сегодня");
+		body += `<g transform='translate(8 34) scale(0.42)'>${weatherIcon(day?.icon ?? icon, true)}</g>`;
+		body += text(132, 66, 30, `${round(w.max)}°`, { weight: 700, anchor: "end" });
+		body += text(132, 100, 26, `${round(w.min)}°`, { weight: 500, color: "#a9c7ee", anchor: "end" });
+		body += text(72, 132, 18, bottom, { weight: 500, color: "#cfe3ff" });
 	} else if (mode === 2) {
-		body += text(72, 24, 17, shorten(label, 13), { weight: 500, color: "#cfe3ff" });
-		body += `<g transform='translate(72 62) rotate(${(w.windDir + 180) % 360})'>
+		body += label(place || desc);
+		body += `<g transform='translate(72 64) rotate(${(w.windDir + 180) % 360})'>
 <path d='M 0 -20 L 11 12 L 0 5 L -11 12 Z' fill='#ffffff'/></g>`;
 		body += text(72, 108, 22, `${round(w.wind)} ${w.windUnit} ${windDirection(w.windDir)}`, { weight: 600 });
 		// Яндекс (бесплатный ключ) не даёт влажность — вместо неё порывы ветра.
@@ -134,8 +235,8 @@ export function renderWeather(w, { city, mode, showCity }) {
 			: w.gust !== null && w.gust !== undefined ? `порывы ${round(w.gust)}` : "";
 		body += text(72, 132, 18, bottom, { weight: 500, color: "#cfe3ff" });
 	} else {
-		body += text(72, 22, 17, label, { weight: 500, color: "#cfe3ff" });
-		body += `<g transform='translate(40 25) scale(0.64)'>${weatherIcon(icon, w.isDay)}</g>`;
+		body += label(place || desc);
+		body += `<g transform='translate(42 30) scale(0.6)'>${weatherIcon(icon, w.isDay)}</g>`;
 		body += text(72, 122, 38, `${round(w.temp)}°`, { weight: 700 });
 		body += text(72, 140, 13, `ощущ. ${round(w.feels)}°`, { weight: 500, color: "#cfe3ff" });
 	}

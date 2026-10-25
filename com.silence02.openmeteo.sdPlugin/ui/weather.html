@@ -103,6 +103,16 @@
 		<div class="ctl"><label><input id="showCity" type="checkbox" checked /> название города</label></div>
 	</div>
 	<div class="row">
+		<label for="labelStyle">Шрифт подписи</label>
+		<div class="ctl">
+			<select id="labelStyle">
+				<option value="own">Жирный, по ширине кнопки</option>
+				<option value="title">Из настроек Title (T)</option>
+			</select>
+		</div>
+	</div>
+	<div class="hint">Текст в поле Title заменяет название города (например, «Питер»). Длинная подпись сама уменьшается, чтобы влезть.</div>
+	<div class="row">
 		<label for="proxy">Прокси</label>
 		<div class="ctl"><input id="proxy" type="text" placeholder="авто (системный)" /></div>
 	</div>
@@ -111,7 +121,7 @@
 
 	<script>
 		const GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search";
-		const DEFAULTS = { source: "openmeteo", units: "celsius", windUnit: "ms", mode: 0, interval: 10, showCity: true };
+		const DEFAULTS = { source: "openmeteo", units: "celsius", windUnit: "ms", mode: 0, interval: 10, showCity: true, labelStyle: "own" };
 		const YANDEX_KEY_URL = "https://yandex.ru/pogoda/b2b/smarthome";
 
 		let socket = null;
@@ -168,6 +178,7 @@
 			$("mode").value = String(settings.mode ?? 0);
 			$("interval").value = String(settings.interval);
 			$("showCity").checked = settings.showCity !== false;
+			$("labelStyle").value = settings.labelStyle;
 			$("proxy").value = settings.proxy ?? "";
 			$("current").textContent = settings.cityName
 				? `Выбрано: ${settings.cityLabel || settings.cityName}`
@@ -250,7 +261,7 @@
 			globalSettings = { ...globalSettings, yandexKey: $("yandexKey").value.trim() };
 			saveGlobal();
 		});
-		for (const id of ["units", "windUnit", "interval", "proxy"]) {
+		for (const id of ["units", "windUnit", "interval", "proxy", "labelStyle"]) {
 			$(id).addEventListener("change", () => { settings[id] = $(id).value; save(); });
 		}
 		$("mode").addEventListener("change", () => { settings.mode = Number($("mode").value); save(); });

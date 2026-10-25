@@ -30,6 +30,18 @@ class WeatherAction extends SingletonAction {
 		yandexEvents.on("request", (count) => streamDeck.logger.info(`Яндекс: запрос погоды, городов в запросе: ${count}`));
 	}
 
+	/**
+	 * Title кнопки из Stream Deck (id → { title, params }). Хранится отдельно от keys:
+	 * событие может прийти раньше willAppear.
+	 */
+	titles = new Map();
+
+	async onTitleParametersDidChange(ev) {
+		this.titles.set(ev.action.id, { title: ev.payload.title ?? "", params: ev.payload.titleParameters ?? {} });
+		const state = this.keys.get(ev.action.id);
+		if (state?.data) await this.draw(state);
+	}
+
 	async onWillAppear(ev) {
 		this.keys.set(ev.action.id, { action: ev.action, settings: ev.payload.settings, timer: null, data: null, pressedAt: 0 });
 		await this.refresh(ev.action.id);
@@ -125,11 +137,19 @@ class WeatherAction extends SingletonAction {
 	async draw(state) {
 		if (!state.data) return;
 		const s = state.settings;
+		const { title = "", params = {} } = this.titles.get(state.action.id) ?? {};
+		const userTitle = title.trim();
 		await state.action.setImage(
 			renderWeather(state.data, {
 				city: s.cityName ?? "",
 				mode: Number(s.mode) || 0,
 				showCity: s.showCity !== false,
+				// Текст Title кнопки заменяет название города (например, «Питер»).
+				title: userTitle,
+				// labelStyle "title" — шрифт, размер, стиль и цвет берутся из настроек Title.
+				titleStyle: s.labelStyle === "title" ? params : null,
+				// Если в Title включён показ заголовка, его рисует сам Stream Deck — не дублируем.
+				hideLabel: Boolean(userTitle && params.showTitle),
 			}),
 		);
 	}
