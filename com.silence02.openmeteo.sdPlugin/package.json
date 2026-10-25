@@ -1,0 +1,1 @@
+﻿{ "name": "openmeteo-streamdeck", "version": "1.0.0", "private": true, "type": "module", "dependencies": { "@elgato/streamdeck": "3.0.3" } }

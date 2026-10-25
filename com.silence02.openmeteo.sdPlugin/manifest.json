@@ -1,0 +1,36 @@
+{
+	"$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+	"UUID": "com.silence02.openmeteo",
+	"Name": "Погода Open-Meteo",
+	"Version": "1.0.0.0",
+	"Author": "silence02",
+	"Description": "Актуальная погода с open-meteo.com на кнопке Stream Deck",
+	"Icon": "imgs/plugin/icon",
+	"Category": "Погода",
+	"CategoryIcon": "imgs/plugin/category",
+	"CodePath": "bin/plugin.js",
+	"SDKVersion": 2,
+	"Software": { "MinimumVersion": "7.1" },
+	"Nodejs": { "Version": "20" },
+	"OS": [
+		{ "Platform": "windows", "MinimumVersion": "10" },
+		{ "Platform": "mac", "MinimumVersion": "12" }
+	],
+	"Actions": [
+		{
+			"UUID": "com.silence02.openmeteo.weather",
+			"Name": "Погода",
+			"Icon": "imgs/actions/weather/icon",
+			"Tooltip": "Текущая погода. Нажатие — сменить вид, долгое нажатие — обновить",
+			"PropertyInspectorPath": "ui/weather.html",
+			"Controllers": ["Keypad"],
+			"SupportedInMultiActions": false,
+			"States": [
+				{
+					"Image": "imgs/actions/weather/key",
+					"ShowTitle": false
+				}
+			]
+		}
+	]
+}

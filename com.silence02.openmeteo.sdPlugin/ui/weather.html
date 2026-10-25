@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ru">
+<head>
+	<meta charset="utf-8" />
+	<title>Погода — настройки</title>
+	<style>
+		body { margin: 0; padding: 8px 12px; background: #2d2d2d; color: #d8d8d8; font: 13px "Segoe UI", system-ui, sans-serif; }
+		.row { display: flex; align-items: center; margin: 6px 0; gap: 8px; }
+		.row > label { flex: 0 0 96px; color: #969696; }
+		.row > .ctl { flex: 1; display: flex; gap: 6px; min-width: 0; }
+		input, select, button { box-sizing: border-box; font: inherit; color: #d8d8d8; background: #3d3d3d; border: 1px solid #555; border-radius: 3px; padding: 4px 6px; min-width: 0; }
+		input[type="text"], input[type="number"], select { flex: 1; width: 100%; }
+		input[type="checkbox"] { flex: none; }
+		button { cursor: pointer; flex: none; }
+		button:hover { background: #4a4a4a; }
+		#results { flex: 1; width: 100%; }
+		.hint { color: #7a7a7a; font-size: 11px; margin: 2px 0 6px 104px; }
+		.status { color: #8fbf8f; }
+		.error { color: #e08a8a; }
+	</style>
+</head>
+<body>
+	<div class="row">
+		<label for="search">Город</label>
+		<div class="ctl">
+			<input id="search" type="text" placeholder="Например, Москва" />
+			<button id="find">Найти</button>
+		</div>
+	</div>
+	<div class="row" id="resultsRow" hidden>
+		<label for="results">Результаты</label>
+		<div class="ctl"><select id="results"></select></div>
+	</div>
+	<div class="hint" id="current">Город не выбран</div>
+
+	<div class="row">
+		<label for="latitude">Широта</label>
+		<div class="ctl"><input id="latitude" type="number" step="0.0001" /></div>
+	</div>
+	<div class="row">
+		<label for="longitude">Долгота</label>
+		<div class="ctl"><input id="longitude" type="number" step="0.0001" /></div>
+	</div>
+	<div class="row">
+		<label for="units">Температура</label>
+		<div class="ctl">
+			<select id="units">
+				<option value="celsius">°C</option>
+				<option value="fahrenheit">°F</option>
+			</select>
+		</div>
+	</div>
+	<div class="row">
+		<label for="windUnit">Ветер</label>
+		<div class="ctl">
+			<select id="windUnit">
+				<option value="ms">м/с</option>
+				<option value="kmh">км/ч</option>
+			</select>
+		</div>
+	</div>
+	<div class="row">
+		<label for="mode">Вид</label>
+		<div class="ctl">
+			<select id="mode">
+				<option value="0">Сейчас</option>
+				<option value="1">Сегодня (макс/мин)</option>
+				<option value="2">Ветер и влажность</option>
+			</select>
+		</div>
+	</div>
+	<div class="row">
+		<label for="interval">Обновление</label>
+		<div class="ctl">
+			<select id="interval">
+				<option value="5">каждые 5 мин</option>
+				<option value="10">каждые 10 мин</option>
+				<option value="15">каждые 15 мин</option>
+				<option value="30">каждые 30 мин</option>
+				<option value="60">каждый час</option>
+			</select>
+		</div>
+	</div>
+	<div class="row">
+		<label for="showCity">Подпись</label>
+		<div class="ctl"><label><input id="showCity" type="checkbox" checked /> название города</label></div>
+	</div>
+	<div class="row">
+		<label for="proxy">Прокси</label>
+		<div class="ctl"><input id="proxy" type="text" placeholder="авто (системный)" /></div>
+	</div>
+	<div class="hint">Пусто — системный прокси Windows, «none» — напрямую, или host:port</div>
+	<div class="hint">Нажатие — сменить вид, долгое нажатие — обновить сейчас.<br />Данные: open-meteo.com</div>
+
+	<script>
+		const GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search";
+		const DEFAULTS = { units: "celsius", windUnit: "ms", mode: 0, interval: 10, showCity: true };
+
+		let socket = null;
+		let context = null;
+		let settings = {};
+		let found = [];
+
+		const $ = (id) => document.getElementById(id);
+
+		// Stream Deck вызывает эту функцию при открытии окна настроек.
+		window.connectElgatoStreamDeckSocket = (port, uuid, registerEvent, info, actionInfo) => {
+			context = uuid;
+			const action = JSON.parse(actionInfo);
+			settings = { ...DEFAULTS, ...(action.payload?.settings ?? {}) };
+			fillForm();
+
+			socket = new WebSocket(`ws://127.0.0.1:${port}`);
+			socket.onopen = () => socket.send(JSON.stringify({ event: registerEvent, uuid }));
+			socket.onmessage = (msg) => {
+				const data = JSON.parse(msg.data);
+				if (data.event === "didReceiveSettings") {
+					settings = { ...DEFAULTS, ...data.payload.settings };
+					fillForm();
+				}
+			};
+		};
+
+		function save() {
+			if (!socket || socket.readyState !== WebSocket.OPEN) return;
+			socket.send(JSON.stringify({ event: "setSettings", context, payload: settings }));
+		}
+
+		function fillForm() {
+			$("latitude").value = settings.latitude ?? "";
+			$("longitude").value = settings.longitude ?? "";
+			$("units").value = settings.units;
+			$("windUnit").value = settings.windUnit;
+			$("mode").value = String(settings.mode ?? 0);
+			$("interval").value = String(settings.interval);
+			$("showCity").checked = settings.showCity !== false;
+			$("proxy").value = settings.proxy ?? "";
+			$("current").textContent = settings.cityName
+				? `Выбрано: ${settings.cityLabel || settings.cityName}`
+				: "Город не выбран — найдите его или введите координаты";
+		}
+
+		async function search() {
+			const name = $("search").value.trim();
+			if (name.length < 2) return;
+			const cur = $("current");
+			cur.className = "hint";
+			cur.textContent = "Поиск…";
+			try {
+				const params = new URLSearchParams({ name, count: "10", language: "ru", format: "json" });
+				const res = await fetch(`${GEOCODING_URL}?${params}`);
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				found = (await res.json()).results ?? [];
+			} catch (err) {
+				cur.className = "hint error";
+				cur.textContent = `Ошибка поиска: ${err.message}`;
+				return;
+			}
+			const sel = $("results");
+			sel.innerHTML = "";
+			if (!found.length) {
+				$("resultsRow").hidden = true;
+				cur.className = "hint error";
+				cur.textContent = "Ничего не найдено";
+				return;
+			}
+			found.forEach((r, i) => {
+				const opt = document.createElement("option");
+				opt.value = String(i);
+				opt.textContent = [r.name, r.admin1, r.country].filter(Boolean).join(", ");
+				sel.appendChild(opt);
+			});
+			$("resultsRow").hidden = false;
+			pick(0);
+		}
+
+		function pick(i) {
+			const r = found[i];
+			if (!r) return;
+			settings.cityName = r.name;
+			settings.cityLabel = [r.name, r.admin1, r.country].filter(Boolean).join(", ");
+			settings.latitude = Math.round(r.latitude * 10000) / 10000;
+			settings.longitude = Math.round(r.longitude * 10000) / 10000;
+			fillForm();
+			$("current").className = "hint status";
+			save();
+		}
+
+		$("find").addEventListener("click", search);
+		$("search").addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
+		$("results").addEventListener("change", (e) => pick(Number(e.target.value)));
+
+		for (const id of ["latitude", "longitude"]) {
+			$(id).addEventListener("change", () => {
+				const v = $(id).value.trim();
+				settings[id] = v === "" ? "" : Number(v);
+				// Координаты введены вручную — название города больше не соответствует.
+				settings.cityName = "";
+				settings.cityLabel = "";
+				fillForm();
+				save();
+			});
+		}
+		for (const id of ["units", "windUnit", "interval", "proxy"]) {
+			$(id).addEventListener("change", () => { settings[id] = $(id).value; save(); });
+		}
+		$("mode").addEventListener("change", () => { settings.mode = Number($("mode").value); save(); });
+		$("showCity").addEventListener("change", () => { settings.showCity = $("showCity").checked; save(); });
+	</script>
+</body>
+</html>
