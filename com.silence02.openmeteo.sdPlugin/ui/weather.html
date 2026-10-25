@@ -17,9 +17,26 @@
 		.hint { color: #7a7a7a; font-size: 11px; margin: 2px 0 6px 104px; }
 		.status { color: #8fbf8f; }
 		.error { color: #e08a8a; }
+		a { color: #6fa8ff; }
 	</style>
 </head>
 <body>
+	<div class="row">
+		<label for="source">Источник</label>
+		<div class="ctl">
+			<select id="source">
+				<option value="openmeteo">Open-Meteo</option>
+				<option value="yandex">Яндекс Погода</option>
+			</select>
+		</div>
+	</div>
+	<div id="yandexBlock" hidden>
+		<div class="row">
+			<label for="yandexKey">Ключ API</label>
+			<div class="ctl"><input id="yandexKey" type="password" placeholder="ключ Яндекс Погоды" /></div>
+		</div>
+		<div class="hint">Бесплатный ключ: <a href="#" id="getKey">yandex.ru/pogoda/b2b/smarthome</a>.<br />Активация до 5 минут. Обновление не чаще раза в 30 мин.</div>
+	</div>
 	<div class="row">
 		<label for="search">Город</label>
 		<div class="ctl">
@@ -94,7 +111,8 @@
 
 	<script>
 		const GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search";
-		const DEFAULTS = { units: "celsius", windUnit: "ms", mode: 0, interval: 10, showCity: true };
+		const DEFAULTS = { source: "openmeteo", units: "celsius", windUnit: "ms", mode: 0, interval: 10, showCity: true };
+		const YANDEX_KEY_URL = "https://yandex.ru/pogoda/b2b/smarthome";
 
 		let socket = null;
 		let context = null;
@@ -127,6 +145,9 @@
 		}
 
 		function fillForm() {
+			$("source").value = settings.source;
+			$("yandexBlock").hidden = settings.source !== "yandex";
+			$("yandexKey").value = settings.yandexKey ?? "";
 			$("latitude").value = settings.latitude ?? "";
 			$("longitude").value = settings.longitude ?? "";
 			$("units").value = settings.units;
@@ -201,7 +222,18 @@
 				save();
 			});
 		}
-		for (const id of ["units", "windUnit", "interval", "proxy"]) {
+		$("source").addEventListener("change", () => {
+			settings.source = $("source").value;
+			// Для Яндекса интервал не меньше 30 минут (лимит ключа).
+			if (settings.source === "yandex" && Number(settings.interval) < 30) settings.interval = "30";
+			fillForm();
+			save();
+		});
+		$("getKey").addEventListener("click", (e) => {
+			e.preventDefault();
+			socket?.send(JSON.stringify({ event: "openUrl", payload: { url: YANDEX_KEY_URL } }));
+		});
+		for (const id of ["units", "windUnit", "interval", "proxy", "yandexKey"]) {
 			$(id).addEventListener("change", () => { settings[id] = $(id).value; save(); });
 		}
 		$("mode").addEventListener("change", () => { settings.mode = Number($("mode").value); save(); });

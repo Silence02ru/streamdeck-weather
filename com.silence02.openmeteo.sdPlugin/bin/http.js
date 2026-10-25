@@ -49,15 +49,25 @@ export async function resolveProxy(setting) {
 	return systemProxy.value;
 }
 
-/** GET-запрос JSON по HTTPS, напрямую или через HTTP-прокси. */
-export function getJson(url, proxy) {
+/**
+ * Запрос JSON по HTTPS, напрямую или через HTTP-прокси.
+ * options: { body — объект, отправляется POST-ом как JSON; headers — доп. заголовки }.
+ */
+export function getJson(url, proxy, { body, headers: extraHeaders = {} } = {}) {
 	const target = new URL(url);
+	const payload = body === undefined ? undefined : JSON.stringify(body);
 	return new Promise((resolve, reject) => {
 		const send = (createConnection) => {
+			const headers = { Accept: "application/json", "User-Agent": "streamdeck-openmeteo/1.0", ...extraHeaders };
+			if (payload !== undefined) {
+				headers["Content-Type"] = "application/json";
+				headers["Content-Length"] = Buffer.byteLength(payload);
+			}
 			const req = https.request(
 				target,
 				{
-					headers: { Accept: "application/json", "User-Agent": "streamdeck-openmeteo/1.0" },
+					method: payload === undefined ? "GET" : "POST",
+					headers,
 					timeout: TIMEOUT_MS,
 					createConnection,
 				},
@@ -66,7 +76,11 @@ export function getJson(url, proxy) {
 					res.setEncoding("utf8");
 					res.on("data", (chunk) => (body += chunk));
 					res.on("end", () => {
-						if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`));
+						if (res.statusCode !== 200) {
+							const err = new Error(`HTTP ${res.statusCode}`);
+							err.status = res.statusCode;
+							return reject(err);
+						}
 						try {
 							resolve(JSON.parse(body));
 						} catch (err) {
@@ -77,7 +91,7 @@ export function getJson(url, proxy) {
 			);
 			req.on("timeout", () => req.destroy(new Error("таймаут")));
 			req.on("error", reject);
-			req.end();
+			req.end(payload);
 		};
 
 		if (!proxy) return send(undefined);

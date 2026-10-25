@@ -6,6 +6,8 @@ import { renderMessage, renderWeather } from "./render.js";
 const MODES = 3;
 const LONG_PRESS_MS = 600;
 const DEFAULT_INTERVAL_MIN = 10;
+// У ключа Яндекс Погоды суточный лимит запросов — не опрашиваем чаще.
+const YANDEX_MIN_INTERVAL_MIN = 30;
 
 class WeatherAction extends SingletonAction {
 	manifestId = "com.silence02.openmeteo.weather";
@@ -30,7 +32,7 @@ class WeatherAction extends SingletonAction {
 		const prev = state.settings;
 		state.settings = ev.payload.settings;
 		// Смена только режима отображения не требует нового запроса.
-		const onlyMode = ["latitude", "longitude", "units", "windUnit", "interval", "proxy"].every((k) => prev[k] === state.settings[k]);
+		const onlyMode = ["latitude", "longitude", "units", "windUnit", "interval", "proxy", "source", "yandexKey"].every((k) => prev[k] === state.settings[k]);
 		if (onlyMode && state.data) await this.draw(state);
 		else await this.refresh(ev.action.id);
 	}
@@ -60,7 +62,8 @@ class WeatherAction extends SingletonAction {
 		if (state.timer) clearTimeout(state.timer);
 
 		const s = state.settings;
-		const intervalMin = Math.max(1, Number(s.interval) || DEFAULT_INTERVAL_MIN);
+		const isYandex = s.source === "yandex";
+		const intervalMin = Math.max(isYandex ? YANDEX_MIN_INTERVAL_MIN : 1, Number(s.interval) || DEFAULT_INTERVAL_MIN);
 		state.timer = setTimeout(() => this.refresh(id), intervalMin * 60 * 1000);
 
 		if (s.latitude === undefined || s.longitude === undefined || s.latitude === "" || s.longitude === "") {
@@ -75,20 +78,27 @@ class WeatherAction extends SingletonAction {
 				units: s.units,
 				windUnit: s.windUnit,
 				proxy: s.proxy,
+				source: s.source,
+				yandexKey: s.yandexKey,
 			});
 			await this.draw(state);
 			if (manual) await state.action.showOk();
 		} catch (err) {
 			streamDeck.logger.error(`Ошибка загрузки погоды: ${err?.message ?? err}`);
+			if (err?.kind === "key") {
+				// Ключ сам не починится — повтор по обычному интервалу или после смены настроек.
+				await state.action.setImage(renderMessage("Проверьте", "ключ Яндекса", true));
+				return;
+			}
 			if (state.data) {
 				// Оставляем последние данные, только показываем предупреждение.
 				await state.action.showAlert();
 			} else {
 				await state.action.setImage(renderMessage("Нет связи", "долгое нажатие", true));
 			}
-			// Повтор через минуту, а не через полный интервал.
+			// Повтор раньше полного интервала (для Яндекса реже — из-за лимита).
 			clearTimeout(state.timer);
-			state.timer = setTimeout(() => this.refresh(id), 60 * 1000);
+			state.timer = setTimeout(() => this.refresh(id), (isYandex ? 5 : 1) * 60 * 1000);
 		}
 	}
 
